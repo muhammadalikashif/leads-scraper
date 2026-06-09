@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  gmaps-scraper:
+    build: .
+    container_name: gmaps-scraper
+    volumes:
+      - ./output:/app/output   # output files appear on host
+    shm_size: "256m"           # Chrome needs shared memory or it crashes
+    restart: "no"              # run once, don't loop forever
