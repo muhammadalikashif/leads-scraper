@@ -28,7 +28,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import List, Optional, Set
 from urllib.parse import quote_plus, urlparse, parse_qs, unquote, urlunparse
-
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
@@ -125,6 +125,35 @@ PLUS_CODE_RE = re.compile(
     re.IGNORECASE,
 )
 
+
+def serve_debug_output_if_enabled() -> None:
+    """
+    Temporary helper to view /app/output files from the browser.
+
+    Enable with:
+      SERVE_DEBUG_FILES=1
+
+    Easy to remove later:
+      1. Delete this method.
+      2. Delete the call after main().
+      3. Remove SERVE_DEBUG_FILES from Coolify.
+    """
+    if os.getenv("SERVE_DEBUG_FILES", "0") != "1":
+        return
+
+    output_dir = os.path.dirname(BIZ_FILE) or "/app/output"
+    os.makedirs(output_dir, exist_ok=True)
+    os.chdir(output_dir)
+
+    port = int(os.getenv("PORT", "3000"))
+
+    print("=" * 70)
+    print(f"Serving debug output directory: {output_dir}")
+    print(f"Listening on: 0.0.0.0:{port}")
+    print("=" * 70)
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), SimpleHTTPRequestHandler)
+    server.serve_forever()
 
 def clean_text(value: Optional[str]) -> str:
     """Strip whitespace, newlines, tabs, icon chars, and emojis."""
@@ -337,6 +366,8 @@ def clean_address(address: str) -> str:
     # Clean leading/trailing punctuation artifacts
     address = re.sub(r"^[,\s]+|[,\s]+$", "", address)
     return address.strip()
+
+
 
 
 def clean_about(raw: str) -> str:
@@ -928,6 +959,6 @@ def main():
         print(f"  Businesses : {biz_writer.count}  -> {BIZ_FILE}, {BIZ_XLSX}")
         print(f"{'='*70}")
 
-
 if __name__ == "__main__":
     main()
+    serve_debug_output_if_enabled()
