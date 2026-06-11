@@ -57,7 +57,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # One entry = one search. Add more strings to scrape additional terms.
 # Each entry becomes its own Google Maps search; results are deduplicated
 # across queries by Maps URL, name, phone, and address.
-QUERIES: List[str] = ['Electronics store Riyadh makkah', 'Electronics store Jeddah medina', 'Computer and tablet shop dammam', 'Mubarak computer shop tabuk', 'Laptop showroom Saudi Arabia jeddah', 'Computer accessories store riyadh', 'PC parts and gaming builds buraydah', 'Laptop repair and data storage makkah', 'Smart home and networking solutions medina', 'Audio and headphones shop dammam', 'Video game store Riyadh tabuk', 'Home theater equipment supplier jeddah', 'Smartwatch and wearable tech shop riyadh', 'Office equipment supplier buraydah', 'Security camera systems installation makkah', 'Boutique clothing store Saudi Arabia medina', 'Perfume shop Riyadh dammam', 'Pet shop and vet tabuk', 'Home appliances showroom jeddah', 'Garden center and plant nursery riyadh', 'Art supply store buraydah', 'Gift wrapping and party supplies makkah', 'Car detailing and interior shop medina', 'Car electronics and accessories dammam', 'Car LED and lighting shop tabuk', 'Motorcycle shop and repair jeddah', 'Auto parts store Saudi Arabia riyadh', 'Automotive paint supplier buraydah', 'Tire shop and wheel alignment makkah', 'Industrial tools and heavy equipment supplier medina', 'Car enthusiast and tuning shop dammam', 'Baby clothing and toy store tabuk', 'Jarir Bookstore jeddah', 'Bookstore Riyadh riyadh', 'Clothing complex Riyadh buraydah', 'Womens clothing shop Jeddah makkah', 'Mens clothing shop Dammam medina', 'Wholesale electronics market Riyadh dammam', 'Automotive service center Jeddah tabuk', 'Automotive paint supplier Saudi Arabia jeddah', 'Car paint shop Riyadh riyadh', 'Performance parts shop Jeddah buraydah', 'Car tuning and modification workshop makkah', 'Auto parts store Riyadh medina', 'Car replacement parts supplier dammam', 'Tire shop and wheel alignment tabuk', 'Car wheels and rims showroom jeddah', 'Industrial tools and equipment supplier riyadh', 'Workshop tools store Riyadh buraydah', 'Car enthusiast merchandise shop makkah', 'Car accessories and stickers market medina', 'Heavy duty truck parts supplier dammam', 'Commercial vehicle equipment Riyadh tabuk', 'Baby clothing and toy store jeddah', 'Baby activity center and toys shop riyadh', 'Children apparel boutique Riyadh buraydah', 'Kids clothing store Jeddah makkah', 'Educational toys shop Riyadh medina', 'Baby care products pharmacy dammam', 'Newborn clothing and stationery shop tabuk', 'Car seats and strollers showroom jeddah', 'Baby travel gear store Riyadh riyadh', 'Diaper and baby care wholesale buraydah', 'Baby feeding accessories shop makkah', 'Baby gifts and newborn hampers store medina', 'Baby nursery furniture showroom dammam', 'Pregnancy and maternity wear boutique tabuk', 'Baby safety equipment supplier jeddah', 'Stroller repair and accessories shop riyadh', 'Baby travel gear showroom Jeddah buraydah', 'Cosmetics and beauty supply store makkah', 'Makeup showroom Riyadh medina', 'Skin care clinic and products shop dammam', 'Hair care and salon supplies store tabuk', 'Perfume and fragrance boutique Riyadh jeddah', 'Nail salon supply store riyadh', 'Beauty tools and accessories shop buraydah', 'Shaving and grooming products store makkah', 'Personal care and hygiene supply medina', 'Oral care and dental supply store dammam', 'Womens clothing boutique Riyadh tabuk', 'Womens shoe store Jeddah jeddah', 'Jewelry showroom Riyadh riyadh', 'Luxury watch boutique Saudi Arabia buraydah', 'Handbags and accessories shop makkah', 'Mens clothing store Riyadh medina', 'Mens fashion boutique Jeddah dammam', 'Girls clothing store Riyadh tabuk', 'School uniforms supplier Saudi Arabia jeddah', 'Boys clothing store Jeddah riyadh', 'Pharmacy and health care store buraydah', 'Baby and child care pharmacy makkah', 'Medical supplies and equipment showroom medina', 'Household supplies wholesale market dammam', 'Home cleaning products store tabuk', 'Home medical equipment supplier jeddah', 'Bedding store Riyadh riyadh', 'Home linens and bath shop Jeddah buraydah', 'Furniture showroom Saudi Arabia makkah', 'Home decor and accessories boutique medina']
+QUERIES: List[str] = ["Electronics store Riyadh"]
 # === Scroll / result limits ===
 # Set MAX_RESULTS_PER_QUERY = 0 to collect all results Google returns for a query.
 # When INFINITE_SCROLL is True the feed is scrolled until no new results load
@@ -465,6 +465,56 @@ def recover(driver):
     return d
 
 
+def save_debug_artifacts(driver, label: str = "debug") -> None:
+    """
+    Temporary debug helper.
+
+    Saves:
+      - screenshot PNG
+      - page HTML
+      - current URL TXT
+
+    Easy to remove later:
+      1. Delete this method.
+      2. Delete calls to save_debug_artifacts(...).
+    """
+    try:
+        output_dir = os.path.dirname(BIZ_FILE) or "/app/output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", label).strip("_")[:80]
+        debug_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_path = os.path.join(output_dir, f"debug_{debug_ts}_{safe_label}")
+
+        current_url = ""
+        try:
+            current_url = driver.current_url
+        except Exception:
+            pass
+
+        try:
+            driver.save_screenshot(f"{base_path}.png")
+        except Exception as e:
+            print(f"  Debug screenshot save failed: {e}")
+
+        try:
+            with open(f"{base_path}.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+        except Exception as e:
+            print(f"  Debug HTML save failed: {e}")
+
+        try:
+            with open(f"{base_path}.txt", "w", encoding="utf-8") as f:
+                f.write(f"URL: {current_url}\n")
+        except Exception as e:
+            print(f"  Debug URL save failed: {e}")
+
+        print(f"  Debug saved: {base_path}.png / .html / .txt")
+
+    except Exception as e:
+        print(f"  Debug artifact helper failed: {e}")
+
+
 # =============================================================================
 # WAITING + SCROLLING
 # =============================================================================
@@ -846,6 +896,7 @@ def main():
                                     # Loop continues; recovered driver is reused
                                 else:
                                     print(f"error: {e}")
+                                    save_debug_artifacts(driver, f"detail_{q_idx}_{idx}_attempt_{d_att}")
                                     break
                         if not success and is_alive(driver):
                             print("  skipped (unrecoverable)")
@@ -855,6 +906,10 @@ def main():
                     # If the exception is a browser/CDP failure, always recover.
                     # Otherwise, retry once with a recovered browser as well.
                     print(f"  Query error (attempt {attempt}/{DETAIL_RETRIES}): {e}")
+
+                    if is_alive(driver):
+                        save_debug_artifacts(driver, f"query_{q_idx}_attempt_{attempt}")
+
                     if attempt < DETAIL_RETRIES or not is_alive(driver):
                         driver = recover(driver)
                         # Loop continues; recovered driver is reused on next attempt
