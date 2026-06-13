@@ -76,7 +76,7 @@ DETAIL_RETRIES:        int      = 3
 # === Browser ===
 HEADLESS:              bool     = True
 PAGE_LOAD_TIMEOUT:     int      = 45
-LANG:                  str      = "en"
+LANG:                  str      = "en-US"
 
 # === Phone formatting ===
 # Set PHONE_REGION to an ISO 2-letter code (e.g. "SA", "PK", "US") to enable
@@ -466,6 +466,9 @@ def create_driver():
     opts.add_argument("--start-maximized")
     opts.add_argument("--disable-notifications")
     opts.add_argument(f"--lang={LANG}")
+    opts.add_experimental_option("prefs", {
+        "intl.accept_languages": "en,en_US"
+    })
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-gpu")
@@ -584,6 +587,86 @@ def scroll(driver, selector: str, times: int, pause: float = 1.5) -> int:
                 break
         time.sleep(pause)
     return done
+
+
+# =============================================================================
+# CONSENT / COOKIE HELPERS
+# =============================================================================
+
+def handle_google_consent(driver, timeout: int = 10) -> bool:
+    """
+    Handles Google's cookie/consent screen.
+
+    Temporary/isolated helper:
+      - Detects consent.google.com page
+      - Clicks Reject all / Accept all / German equivalents
+      - Returns True if a consent button was clicked
+    """
+    try:
+        current_url = driver.current_url.lower()
+
+        if "consent.google." not in current_url:
+            return False
+
+        print("  Google consent page detected. Trying to continue...")
+
+        time.sleep(2)
+
+        # Scroll down because buttons may be lower on the consent page
+        try:
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1)
+        except Exception:
+            pass
+
+        button_texts = [
+            "Reject all",
+            "Accept all",
+            "I agree",
+            "Alle ablehnen",
+            "Alle akzeptieren",
+            "Ich stimme zu",
+            "Ablehnen",
+            "Akzeptieren",
+        ]
+
+        for text in button_texts:
+            try:
+                xpath = (
+                    f"//button[.//*[contains(normalize-space(), '{text}')] "
+                    f"or contains(normalize-space(), '{text}')]"
+                )
+                btn = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                )
+                driver.execute_script("arguments[0].click();", btn)
+                print(f"  Clicked Google consent button: {text}")
+                time.sleep(5)
+                return True
+            except Exception:
+                pass
+
+        # Fallback: click visible buttons near bottom
+        buttons = driver.find_elements(By.TAG_NAME, "button")
+        for btn in buttons:
+            try:
+                label = clean_text(btn.text)
+                if label:
+                    print(f"  Consent button candidate: {label}")
+                if any(t.lower() in label.lower() for t in button_texts):
+                    driver.execute_script("arguments[0].click();", btn)
+                    print(f"  Clicked Google consent fallback button: {label}")
+                    time.sleep(5)
+                    return True
+            except Exception:
+                pass
+
+        print("  Google consent page found, but no consent button clicked.")
+        return False
+
+    except Exception as e:
+        print(f"  Google consent handler failed: {e}")
+        return False
 
 
 # =============================================================================
@@ -852,7 +935,17 @@ def main():
 
             for attempt in range(1, DETAIL_RETRIES + 1):
                 try:
-                    driver.get(f"https://www.google.com/maps/search/{quote_plus(query)}")
+                    maps_url = f"https://www.google.com/maps/search/{quote_plus(query)}?hl=en&gl=SA"
+                    driver.get(maps_url)
+
+                    handle_google_consent(driver)
+
+                    # If consent redirected successfully, wait for Maps results.
+                    # If still on consent page, save debug and fail clearly.
+                    if "consent.google." in driver.current_url.lower():
+                        save_debug_artifacts(driver, f"consent_blocked_query_{q_idx}_attempt_{attempt}")
+                        raise Exception("Google consent page could not be bypassed automatically")
+
                     wait_results(driver)
 
                     # Collect URLs from the feed, scrolling either a fixed number
